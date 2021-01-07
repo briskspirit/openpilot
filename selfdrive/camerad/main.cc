@@ -1,6 +1,5 @@
 #include <thread>
 #include <stdio.h>
-#include <signal.h>
 #include <poll.h>
 #include <assert.h>
 #include <unistd.h>
@@ -23,15 +22,12 @@
 #include "common/params.h"
 #include "common/swaglog.h"
 #include "common/util.h"
+#include "common/utilpp.h"
 #include "common/visionipc.h"
 
 #define MAX_CLIENTS 6
 
-volatile sig_atomic_t do_exit = 0;
-
-static void set_do_exit(int sig) {
-  do_exit = 1;
-}
+ExitHandler do_exit;
 
 struct VisionState;
 
@@ -72,13 +68,13 @@ static CameraBuf *get_camerabuf_by_type(VisionState *s, VisionStreamType type) {
 // visionserver
 void* visionserver_client_thread(void* arg) {
   int err;
-  VisionClientState *client = (VisionClientState*)arg;
+  auto *client = (VisionClientState*)arg;
   VisionState *s = client->s;
   int fd = client->fd;
 
   set_thread_name("clientthread");
 
-  VisionClientStreamState streams[VISION_STREAM_MAX] = {{0}};
+  VisionClientStreamState streams[VISION_STREAM_MAX] = {{false}};
 
   LOGW("client start fd %d", fd);
 
@@ -215,12 +211,12 @@ void* visionserver_client_thread(void* arg) {
 
   LOGW("client end fd %d", fd);
 
-  for (int i=0; i<VISION_STREAM_MAX; i++) {
-    if (!streams[i].subscribed) continue;
-    if (streams[i].tb) {
-      tbuffer_release_all(streams[i].tbuffer);
+  for (auto &stream : streams) {
+    if (!stream.subscribed) continue;
+    if (stream.tb) {
+      tbuffer_release_all(stream.tbuffer);
     } else {
-      pool_release_queue(streams[i].queue);
+      pool_release_queue(stream.queue);
     }
   }
 
@@ -286,12 +282,12 @@ void* visionserver_thread(void* arg) {
     pthread_mutex_unlock(&s->clients_lock);
   }
 
-  for (int i=0; i<MAX_CLIENTS; i++) {
+  for (auto &client : s->clients) {
     pthread_mutex_lock(&s->clients_lock);
-    bool running = s->clients[i].running;
+    bool running = client.running;
     pthread_mutex_unlock(&s->clients_lock);
     if (running) {
-      err = pthread_join(s->clients[i].thread_handle, NULL);
+      err = pthread_join(client.thread_handle, NULL);
       assert(err == 0);
     }
   }
@@ -330,9 +326,6 @@ int main(int argc, char *argv[]) {
 #elif defined(QCOM2)
   set_core_affinity(6);
 #endif
-
-  signal(SIGINT, (sighandler_t)set_do_exit);
-  signal(SIGTERM, (sighandler_t)set_do_exit);
 
   cl_device_id device_id = cl_get_device_id(CL_DEVICE_TYPE_DEFAULT);
 

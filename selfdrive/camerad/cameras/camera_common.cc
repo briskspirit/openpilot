@@ -1,6 +1,5 @@
 #include <thread>
 #include <stdio.h>
-#include <signal.h>
 #include <assert.h>
 #include <unistd.h>
 
@@ -22,6 +21,7 @@
 #include "common/params.h"
 #include "common/swaglog.h"
 #include "common/util.h"
+#include "common/utilpp.h"
 #include "imgproc/utils.h"
 
 const int env_xmin = getenv("XMIN") ? atoi(getenv("XMIN")) : 0;
@@ -72,12 +72,12 @@ void CameraBuf::init(cl_device_id device_id, cl_context context, CameraState *s,
 #else
   float db_s = 1.0;
 #endif
-
-  if (ci->bayer) {
-    yuv_transform = transform_scale_buffer(s->transform, db_s);
-  } else {
-    yuv_transform = s->transform;
-  }
+  const mat3 transform = (mat3){{
+    1.0, 0.0, 0.0,
+    0.0, 1.0, 0.0,
+    0.0, 0.0, 1.0
+  }};
+  yuv_transform = ci->bayer ? transform_scale_buffer(transform, db_s) : transform;
 
   for (int i = 0; i < UI_BUF_COUNT; i++) {
     VisionImg img = visionimg_alloc_rgb24(device_id, context, rgb_width, rgb_height, &rgb_bufs[i]);
@@ -123,11 +123,11 @@ CameraBuf::~CameraBuf() {
   for (int i = 0; i < frame_buf_count; i++) {
     visionbuf_free(&camera_bufs[i]);
   }
-  for (int i = 0; i < UI_BUF_COUNT; i++) {
-    visionbuf_free(&rgb_bufs[i]);
+  for (auto &buf : rgb_bufs) {
+    visionbuf_free(&buf);
   }
-  for (int i = 0; i < YUV_COUNT; i++) {
-    visionbuf_free(&yuv_ion[i]);
+  for (auto &buf : yuv_ion) {
+    visionbuf_free(&buf);
   }
   rgb_to_yuv_destroy(&rgb_to_yuv_state);
 
@@ -198,12 +198,11 @@ bool CameraBuf::acquire() {
   pool_acquire(&yuv_pool, cur_yuv_idx);
   pool_push(&yuv_pool, cur_yuv_idx);
 
-  tbuffer_dispatch(&ui_tb, cur_rgb_idx);
-
   return true;
 }
 
 void CameraBuf::release() {
+  tbuffer_dispatch(&ui_tb, cur_rgb_idx);
   pool_release(&yuv_pool, cur_yuv_idx);
 }
 
@@ -350,7 +349,7 @@ void set_exposure_target(CameraState *c, const uint8_t *pix_ptr, int x_start, in
   camera_autoexposure(c, lum_med / 256.0);
 }
 
-extern volatile sig_atomic_t do_exit;
+extern ExitHandler do_exit;
 
 void *processing_thread(MultiCameraState *cameras, const char *tname,
                           CameraState *cs, process_thread_cb callback) {

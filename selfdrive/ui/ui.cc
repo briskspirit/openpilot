@@ -16,7 +16,6 @@
 #include "ui.hpp"
 #include "paint.hpp"
 
-extern volatile sig_atomic_t do_exit;
 
 int write_param_float(float param, const char* param_name, bool persistent_param) {
   char s[16];
@@ -31,7 +30,6 @@ void ui_init(UIState *s) {
   s->started = false;
   s->status = STATUS_OFFROAD;
   s->scene.satelliteCount = -1;
-  read_param(&s->is_metric, "IsMetric");
 
   s->fb = framebuffer_init("ui", 0, true, &s->fb_w, &s->fb_h);
   assert(s->fb);
@@ -107,6 +105,50 @@ destroy:
   s->vision_connected = false;
 }
 
+template <class T>
+static void update_line_data(const UIState *s, const cereal::ModelDataV2::XYZTData::Reader &line,
+                             float y_off, float z_off, T *pvd, float max_distance) {
+  const auto line_x = line.getX(), line_y = line.getY(), line_z = line.getZ();
+  int max_idx = -1;
+  vertex_data *v = &pvd->v[0];
+  const float margin = 500.0f;
+  for (int i = 0; ((i < TRAJECTORY_SIZE) and (line_x[i] < fmax(MIN_DRAW_DISTANCE, max_distance))); i++) {
+    v += car_space_to_full_frame(s, line_x[i], -line_y[i] - y_off, -line_z[i] + z_off, v, margin);
+    max_idx = i;
+  }
+  for (int i = max_idx; i >= 0; i--) {
+    v += car_space_to_full_frame(s, line_x[i], -line_y[i] + y_off, -line_z[i] + z_off, v, margin);
+  }
+  pvd->cnt = v - pvd->v;
+  assert(pvd->cnt < std::size(pvd->v));
+}
+
+static void update_model(UIState *s, const cereal::ModelDataV2::Reader &model) {
+  UIScene &scene = s->scene;
+  const float max_distance = fmin(model.getPosition().getX()[TRAJECTORY_SIZE - 1], MAX_DRAW_DISTANCE);
+  // update lane lines
+  const auto lane_lines = model.getLaneLines();
+  const auto lane_line_probs = model.getLaneLineProbs();
+  for (int i = 0; i < std::size(scene.lane_line_vertices); i++) {
+    scene.lane_line_probs[i] = lane_line_probs[i];
+    update_line_data(s, lane_lines[i], 0.025 * scene.lane_line_probs[i], 1.22, &scene.lane_line_vertices[i], max_distance);
+  }
+
+  // update road edges
+  const auto road_edges = model.getRoadEdges();
+  const auto road_edge_stds = model.getRoadEdgeStds();
+  for (int i = 0; i < std::size(scene.road_edge_vertices); i++) {
+    scene.road_edge_stds[i] = road_edge_stds[i];
+    update_line_data(s, road_edges[i], 0.025, 1.22, &scene.road_edge_vertices[i], max_distance);
+  }
+
+  // update path
+  const float lead_d = scene.lead_data[0].getStatus() ? scene.lead_data[0].getDRel() * 2. : MAX_DRAW_DISTANCE;
+  float path_length = (lead_d > 0.) ? lead_d - fmin(lead_d * 0.35, 10.) : MAX_DRAW_DISTANCE;
+  path_length = fmin(path_length, max_distance);
+  update_line_data(s, model.getPosition(), 0.5, 0, &scene.track_vertices, path_length);
+}
+
 void update_sockets(UIState *s) {
 
   UIScene &scene = s->scene;
@@ -173,28 +215,12 @@ void update_sockets(UIState *s) {
     }
   }
   if (sm.updated("modelV2")) {
-    scene.model = sm["modelV2"].getModelV2();
-    scene.max_distance = fmin(scene.model.getPosition().getX()[TRAJECTORY_SIZE - 1], MAX_DRAW_DISTANCE);
-    for (int ll_idx = 0; ll_idx < 4; ll_idx++) {
-      if (scene.model.getLaneLineProbs().size() > ll_idx) {
-        scene.lane_line_probs[ll_idx] = scene.model.getLaneLineProbs()[ll_idx];
-      } else {
-        scene.lane_line_probs[ll_idx] = 0.0;
-      }
-    }
-
-    for (int re_idx = 0; re_idx < 2; re_idx++) {
-      if (scene.model.getRoadEdgeStds().size() > re_idx) {
-        scene.road_edge_stds[re_idx] = scene.model.getRoadEdgeStds()[re_idx];
-      } else {
-        scene.road_edge_stds[re_idx] = 1.0;
-      }
-    }
+    update_model(s, sm["modelV2"].getModelV2());
   }
   if (sm.updated("uiLayoutState")) {
     auto data = sm["uiLayoutState"].getUiLayoutState();
     s->active_app = data.getActiveApp();
-    scene.uilayout_sidebarcollapsed = data.getSidebarCollapsed();
+    scene.sidebar_collapsed = data.getSidebarCollapsed();
   }
   if (sm.updated("thermal")) {
     scene.thermal = sm["thermal"].getThermal();
@@ -222,7 +248,7 @@ void update_sockets(UIState *s) {
     scene.dmonitoring_state = sm["dMonitoringState"].getDMonitoringState();
     scene.is_rhd = scene.dmonitoring_state.getIsRHD();
     scene.frontview = scene.dmonitoring_state.getIsPreview();
-  } else if ((sm.frame - sm.rcv_frame("dMonitoringState")) > UI_FREQ/2) {
+  } else if (scene.frontview && (sm.frame - sm.rcv_frame("dMonitoringState")) > UI_FREQ/2) {
     scene.frontview = false;
   }
   if (sm.updated("sensorEvents")) {
@@ -240,8 +266,22 @@ void update_sockets(UIState *s) {
   s->started = scene.thermal.getStarted() || scene.frontview;
 }
 
-void ui_update(UIState *s) {
+static void ui_read_params(UIState *s) {
+  const uint64_t frame = s->sm->frame;
 
+  if (frame % (5*UI_FREQ) == 0) {
+    read_param(&s->is_metric, "IsMetric");
+  } else if (frame % (6*UI_FREQ) == 0) {
+    s->scene.athenaStatus = NET_DISCONNECTED;
+    uint64_t last_ping = 0;
+    if (read_param(&last_ping, "LastAthenaPingTime") == 0) {
+      s->scene.athenaStatus = nanos_since_boot() - last_ping < 70e9 ? NET_CONNECTED : NET_ERROR;
+    }
+  }
+}
+
+void ui_update(UIState *s) {
+  ui_read_params(s);
   update_sockets(s);
   ui_update_vision(s);
 
@@ -249,14 +289,14 @@ void ui_update(UIState *s) {
   if (!s->started && s->status != STATUS_OFFROAD) {
     s->status = STATUS_OFFROAD;
     s->active_app = cereal::UiLayoutState::App::HOME;
-    s->scene.uilayout_sidebarcollapsed = false;
+    s->scene.sidebar_collapsed = false;
     s->sound->stop();
   } else if (s->started && s->status == STATUS_OFFROAD) {
     s->status = STATUS_DISENGAGED;
     s->started_frame = s->sm->frame;
 
     s->active_app = cereal::UiLayoutState::App::NONE;
-    s->scene.uilayout_sidebarcollapsed = true;
+    s->scene.sidebar_collapsed = true;
     s->alert_blinked = false;
     s->alert_blinking_alpha = 1.0;
     s->scene.alert_size = cereal::ControlsState::AlertSize::NONE;
@@ -293,20 +333,6 @@ void ui_update(UIState *s) {
       s->scene.alert_size = cereal::ControlsState::AlertSize::FULL;
       s->status = STATUS_DISENGAGED;
       s->sound->stop();
-    }
-  }
-
-  // Read params
-  if ((s->sm)->frame % (5*UI_FREQ) == 0) {
-    read_param(&s->is_metric, "IsMetric");
-  } else if ((s->sm)->frame % (6*UI_FREQ) == 0) {
-    int param_read = read_param(&s->last_athena_ping, "LastAthenaPingTime");
-    if (param_read != 0) { // Failed to read param
-      s->scene.athenaStatus = NET_DISCONNECTED;
-    } else if (nanos_since_boot() - s->last_athena_ping < 70e9) {
-      s->scene.athenaStatus = NET_CONNECTED;
-    } else {
-      s->scene.athenaStatus = NET_ERROR;
     }
   }
 }

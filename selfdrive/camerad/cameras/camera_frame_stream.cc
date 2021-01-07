@@ -3,12 +3,12 @@
 #include <unistd.h>
 #include <cassert>
 #include <string.h>
-#include <signal.h>
 
 #include <libyuv.h>
 #include "messaging.hpp"
 
 #include "common/util.h"
+#include "common/utilpp.h"
 #include "common/timing.h"
 #include "common/swaglog.h"
 #include "buffering.h"
@@ -17,7 +17,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
-extern volatile sig_atomic_t do_exit;
+extern ExitHandler do_exit;
 
 #define FRAME_WIDTH 1164
 #define FRAME_HEIGHT 874
@@ -89,18 +89,7 @@ CameraInfo cameras_supported[CAMERA_ID_MAX] = {
 
 void cameras_init(MultiCameraState *s, cl_device_id device_id, cl_context ctx) {
   camera_init(&s->rear, CAMERA_ID_IMX298, 20, device_id, ctx);
-  s->rear.transform = (mat3){{
-    1.0,  0.0, 0.0,
-    0.0, 1.0, 0.0,
-    0.0,  0.0, 1.0,
-  }};
-
   camera_init(&s->front, CAMERA_ID_OV8865, 10, device_id, ctx);
-  s->front.transform = (mat3){{
-    1.0,  0.0, 0.0,
-    0.0, 1.0, 0.0,
-    0.0,  0.0, 1.0,
-  }};
 }
 
 void camera_autoexposure(CameraState *s, float grey_frac) {}

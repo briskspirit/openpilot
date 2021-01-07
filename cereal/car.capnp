@@ -73,7 +73,6 @@ struct CarEvent @0x9b1657f34caf3ad3 {
     preLaneChangeLeft @57;
     preLaneChangeRight @58;
     laneChange @59;
-    internetConnectivityNeeded @61;
     communityFeatureDisallowed @62;
     lowMemory @63;
     stockAeb @64;
@@ -113,6 +112,7 @@ struct CarEvent @0x9b1657f34caf3ad3 {
     calibrationProgressDEPRECATED @47;
     invalidGiraffeHondaDEPRECATED @49;
     invalidGiraffeToyotaDEPRECATED @60;
+    internetConnectivityNeededDEPRECATED @61;
     whitePandaUnsupportedDEPRECATED @81;
     commIssueWarningDEPRECATED @83;
     focusRecoverActiveDEPRECATED @86;
@@ -438,10 +438,19 @@ struct CarParams {
   }
 
   struct LateralINDITuning {
-    outerLoopGain @0 :Float32;
-    innerLoopGain @1 :Float32;
-    timeConstant @2 :Float32;
-    actuatorEffectiveness @3 :Float32;
+    outerLoopGainBP @4 :List(Float32);
+    outerLoopGainV @5 :List(Float32);
+    innerLoopGainBP @6 :List(Float32);
+    innerLoopGainV @7 :List(Float32);
+    timeConstantBP @8 :List(Float32);
+    timeConstantV @9 :List(Float32);
+    actuatorEffectivenessBP @10 :List(Float32);
+    actuatorEffectivenessV @11 :List(Float32);
+
+    outerLoopGainDEPRECATED @0 :Float32;
+    innerLoopGainDEPRECATED @1 :Float32;
+    timeConstantDEPRECATED @2 :Float32;
+    actuatorEffectivenessDEPRECATED @3 :Float32;
   }
 
   struct LateralLQRTuning {

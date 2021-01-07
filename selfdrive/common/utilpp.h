@@ -2,11 +2,18 @@
 
 #include <cstdio>
 #include <unistd.h>
-
+#include <csignal>
 #include <string>
 #include <memory>
+#include <atomic>
 #include <sstream>
 #include <fstream>
+#include <thread>
+#include <chrono>
+
+#ifndef sighandler_t
+typedef void (*sighandler_t)(int sig);
+#endif
 
 namespace util {
 
@@ -60,7 +67,35 @@ inline std::string readlink(std::string path) {
   return "";
 }
 
+inline std::string getenv_default(const char* env_var, const char * suffix, const char* default_val) {
+  const char* env_val = getenv(env_var);
+  if (env_val != NULL){
+    return std::string(env_val) + std::string(suffix);
+  } else {
+    return std::string(default_val);
+  }
 }
+
+inline void sleep_for(const int milliseconds) {
+  std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+}
+}
+
+class ExitHandler {
+public:
+  ExitHandler() {
+    std::signal(SIGINT, (sighandler_t)set_do_exit);
+    std::signal(SIGTERM, (sighandler_t)set_do_exit);
+  };
+  inline operator bool() { return do_exit; }
+  inline ExitHandler& operator=(bool v) {
+    do_exit = v;
+    return *this;
+  }
+private:
+  static void set_do_exit(int sig) { do_exit = true; }
+  inline static std::atomic<bool> do_exit = false;
+};
 
 struct unique_fd {
   unique_fd(int fd = -1) : fd_(fd) {}

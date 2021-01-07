@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
 #include <unistd.h>
 #include <eigen3/Eigen/Dense>
 
@@ -8,15 +7,12 @@
 #include "common/visionipc.h"
 #include "common/swaglog.h"
 #include "common/clutil.h"
+#include "common/utilpp.h"
 
 #include "models/driving.h"
 #include "messaging.hpp"
-volatile sig_atomic_t do_exit = 0;
 
-static void set_do_exit(int sig) {
-  do_exit = 1;
-}
-
+ExitHandler do_exit;
 // globals
 bool run_model;
 mat3 cur_transform;
@@ -102,9 +98,6 @@ int main(int argc, char **argv) {
   set_core_affinity(4);
 #endif
 
-  signal(SIGINT, (sighandler_t)set_do_exit);
-  signal(SIGTERM, (sighandler_t)set_do_exit);
-
   pthread_mutex_init(&transform_lock, NULL);
 
   // start calibration thread
@@ -132,7 +125,7 @@ int main(int argc, char **argv) {
     err = visionstream_init(&stream, VISION_STREAM_YUV, true, &buf_info);
     if (err) {
       LOGW("visionstream connect failed");
-      usleep(100000);
+      util::sleep_for(100);
       continue;
     }
     LOGW("connected with buffer size: %d", buf_info.buf_len);

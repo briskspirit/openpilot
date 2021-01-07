@@ -21,6 +21,7 @@
 #include "msm_cam_sensor.h"
 
 #include "common/util.h"
+#include "common/utilpp.h"
 #include "common/timing.h"
 #include "common/swaglog.h"
 #include "common/params.h"
@@ -33,7 +34,7 @@
 #include "camera_qcom.h"
 
 
-extern volatile sig_atomic_t do_exit;
+extern ExitHandler do_exit;
 
 // global var for AE/AF ops
 std::atomic<CameraExpInfo> rear_exp{{0}};
@@ -315,20 +316,6 @@ void cameras_init(MultiCameraState *s, cl_device_id device_id, cl_context ctx) {
     s->front.apply_exposure = imx179_s5k3p8sp_apply_exposure;
   }
 
-  // assume the device is upside-down (not anymore)
-  s->rear.transform = (mat3){{
-     1.0,  0.0, 0.0,
-     0.0,  1.0, 0.0,
-     0.0,  0.0, 1.0,
-  }};
-
-  // probably wrong
-  s->front.transform = (mat3){{
-     1.0,  0.0, 0.0,
-     0.0,  1.0, 0.0,
-     0.0,  0.0, 1.0,
-  }};
-
   s->rear.device = s->device;
   s->front.device = s->device;
 
@@ -440,7 +427,6 @@ static void do_autoexposure(CameraState *s, float grey_frac) {
     pthread_mutex_unlock(&s->frame_info_lock);
 
     set_exposure(s, s->cur_exposure_frac, cur_gain_frac);
-
   } else { // keep the old for others
     float new_exposure = s->cur_exposure_frac;
     new_exposure *= pow(1.05, (target_grey - grey_frac) / 0.05 );
@@ -545,8 +531,6 @@ static void imx298_ois_calibration(int ois_fd, uint8_t* eeprom) {
   err = ioctl(ois_fd, VIDIOC_MSM_OIS_CFG, &cfg);
   LOG("ois reg calibration: %d", err);
 }
-
-
 
 
 static void sensors_init(MultiCameraState *s) {
@@ -794,7 +778,6 @@ static void sensors_init(MultiCameraState *s) {
   err = ioctl(sensorinit_fd, VIDIOC_MSM_SENSOR_INIT_CFG, &sensor_init_cfg);
   LOG("sensor init cfg (rear): %d", err);
   assert(err >= 0);
-
 
   struct msm_camera_sensor_slave_info slave_info2 = {0};
   if (s->device == DEVICE_LP3) {
@@ -2000,10 +1983,10 @@ const char* get_isp_event_name(unsigned int type) {
 
 static FrameMetadata get_frame_metadata(CameraState *s, uint32_t frame_id) {
   pthread_mutex_lock(&s->frame_info_lock);
-  for (int i=0; i<METADATA_BUF_COUNT; i++) {
-    if (s->frame_metadata[i].frame_id == frame_id) {
+  for (auto &i : s->frame_metadata) {
+    if (i.frame_id == frame_id) {
       pthread_mutex_unlock(&s->frame_info_lock);
-      return s->frame_metadata[i];
+      return i;
     }
   }
   pthread_mutex_unlock(&s->frame_info_lock);
@@ -2039,7 +2022,7 @@ static void* ops_thread(void* arg) {
       front_op_id_last = front_op.op_id;
     }
 
-    usleep(50000);
+    util::sleep_for(50);
   }
 
   return NULL;
@@ -2162,7 +2145,7 @@ void cameras_run(MultiCameraState *s) {
     fds[1].events = POLLPRI;
 
     int ret = poll(fds, ARRAYSIZE(fds), 1000);
-    if (ret <= 0) {
+    if (ret < 0) {
       if (errno == EINTR || errno == EAGAIN) continue;
       LOGE("poll failed (%d - %d)", ret, errno);
       break;

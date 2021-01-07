@@ -16,6 +16,7 @@
 #include "home.hpp"
 #include "paint.hpp"
 #include "qt_window.hpp"
+#include "widgets/drive_stats.hpp"
 
 #define BACKLIGHT_DT 0.25
 #define BACKLIGHT_TS 2.00
@@ -25,9 +26,7 @@ OffroadHome::OffroadHome(QWidget *parent) : QWidget(parent) {
   QVBoxLayout *main_layout = new QVBoxLayout();
   main_layout->setContentsMargins(sbr_w + 50, 50, 50, 50);
 
-  center_layout = new QStackedLayout();
-
-  // header
+  // top header
   QHBoxLayout *header_layout = new QHBoxLayout();
 
   date = new QLabel();
@@ -44,9 +43,12 @@ OffroadHome::OffroadHome(QWidget *parent) : QWidget(parent) {
   QObject::connect(alert_notification, SIGNAL(released()), this, SLOT(openAlerts()));
   main_layout->addWidget(alert_notification, 0, Qt::AlignTop | Qt::AlignRight);
 
-  // center
-  QLabel *drive = new QLabel("Drive me");
-  drive->setStyleSheet(R"(font-size: 175px;)");
+  // main content
+  main_layout->addSpacing(25);
+  center_layout = new QStackedLayout();
+
+  DriveStats *drive = new DriveStats;
+  drive->setFixedSize(1000, 800);
   center_layout->addWidget(drive);
 
   alerts_widget = new OffroadAlert();
@@ -109,10 +111,10 @@ void OffroadHome::refresh() {
     border-radius: 5px;
     font-size: 40px;
     font-weight: bold;
-    background-color: red;
+    background-color: #E22C2C;
   )");
   if (alerts_widget->updateAvailable){
-    style.replace("red", "blue");
+    style.replace("#E22C2C", "#364DEF");
   }
   alert_notification->setStyleSheet(style);
 }
@@ -149,13 +151,13 @@ void HomeWindow::mousePressEvent(QMouseEvent *e) {
   glWindow->wake();
 
   // Settings button click
-  if (!ui_state->scene.uilayout_sidebarcollapsed && settings_btn.ptInRect(e->x(), e->y())) {
+  if (!ui_state->scene.sidebar_collapsed && settings_btn.ptInRect(e->x(), e->y())) {
     emit openSettings();
   }
 
   // Vision click
   if (ui_state->started && (e->x() >= ui_state->scene.viz_rect.x - bdr_s)) {
-    ui_state->scene.uilayout_sidebarcollapsed = !ui_state->scene.uilayout_sidebarcollapsed;
+    ui_state->scene.sidebar_collapsed = !ui_state->scene.sidebar_collapsed;
   }
 }
 
@@ -218,7 +220,7 @@ void GLWindow::initializeGL() {
   wake();
 
   timer->start(0);
-  backlight_timer->start(BACKLIGHT_DT * 100);
+  backlight_timer->start(BACKLIGHT_DT * 1000);
 }
 
 void GLWindow::backlightUpdate() {
