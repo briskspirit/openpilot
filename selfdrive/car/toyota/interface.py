@@ -211,22 +211,21 @@ class CarInterface(CarInterfaceBase):
 
     elif candidate in [CAR.COROLLA_TSS2, CAR.COROLLAH_TSS2]:
       stop_and_go = True
-      ret.safetyParam = 50
+      ret.safetyParam = 53
       ret.wheelbase = 2.67
       ret.steerRatio = 15.33
-      tire_stiffness_factor = 0.996  # 3055 is mean between SE/LE/Hybrid
+      tire_stiffness_factor = 0.996  # not optimized yet
       ret.mass = 3060. * CV.LB_TO_KG + STD_CARGO_KG
-      # Lateral tune
       ret.lateralTuning.init('indi')
-      ret.lateralTuning.indi.innerLoopGainBP = [20., 24.]
-      ret.lateralTuning.indi.innerLoopGainV = [7.25, 7.5]
-      ret.lateralTuning.indi.outerLoopGainBP = [20., 24.]
-      ret.lateralTuning.indi.outerLoopGainV = [5., 7.]
-      ret.lateralTuning.indi.timeConstantBP = [20., 24.]
-      ret.lateralTuning.indi.timeConstantV = [1.6, 1.83]
-      ret.lateralTuning.indi.actuatorEffectivenessBP = [20., 24.]
-      ret.lateralTuning.indi.actuatorEffectivenessV = [2.0, 3.0]
-      ret.steerActuatorDelay = 0.3
+      ret.lateralTuning.indi.innerLoopGainBP = [18, 22, 26]
+      ret.lateralTuning.indi.innerLoopGainV = [5, 12, 15]
+      ret.lateralTuning.indi.outerLoopGainBP = [18, 22, 26]
+      ret.lateralTuning.indi.outerLoopGainV = [4, 11, 14.99]
+      ret.lateralTuning.indi.timeConstantBP = [18, 22, 26]
+      ret.lateralTuning.indi.timeConstantV = [2, 4, 5.5]
+      ret.lateralTuning.indi.actuatorEffectivenessBP = [18, 22, 26]
+      ret.lateralTuning.indi.actuatorEffectivenessV = [5, 12, 15]
+      ret.steerActuatorDelay = 0.45  # needs verification
 
     elif candidate in [CAR.LEXUS_ES_TSS2, CAR.LEXUS_ESH_TSS2]:
       stop_and_go = True
