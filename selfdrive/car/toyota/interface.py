@@ -22,6 +22,7 @@ class CarInterface(CarInterfaceBase):
     ret.safetyModel = car.CarParams.SafetyModel.toyota
 
     ret.steerActuatorDelay = 0.12  # Default delay, Prius has larger delay
+    ret.steerRateCost = 1.
     ret.steerLimitTimer = 0.4
 
     # EXPERIMENTAL tune for all Toyota/Lexus models
@@ -226,6 +227,7 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.indi.actuatorEffectivenessBP = [18, 22, 26]
       ret.lateralTuning.indi.actuatorEffectivenessV = [5, 12, 15]
       ret.steerActuatorDelay = 0.45  # needs verification
+      ret.steerRateCost = 0.5
 
     elif candidate in [CAR.LEXUS_ES_TSS2, CAR.LEXUS_ESH_TSS2]:
       stop_and_go = True
@@ -297,7 +299,6 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.35], [0.15]]
       ret.lateralTuning.pid.kf = 0.00007818594
 
-    ret.steerRateCost = 1.
     ret.centerToFront = ret.wheelbase * 0.44
 
     # TODO: get actual value, for now starting with reasonable value for
