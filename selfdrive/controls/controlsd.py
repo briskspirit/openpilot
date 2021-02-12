@@ -22,6 +22,7 @@ from selfdrive.controls.lib.vehicle_model import VehicleModel
 from selfdrive.controls.lib.longitudinal_planner import LON_MPC_STEP
 from selfdrive.locationd.calibrationd import Calibration
 from selfdrive.hardware import HARDWARE, TICI
+from selfdrive.interceptor import Interceptor
 
 LDW_MIN_SPEED = 31 * CV.MPH_TO_MS
 LANE_DEPARTURE_THRESHOLD = 0.1
@@ -57,7 +58,9 @@ class Controls:
       ignore = ['ubloxRaw', 'frontFrame', 'managerState'] if SIMULATION else None
       self.sm = messaging.SubMaster(['thermal', 'health', 'modelV2', 'liveCalibration', 'ubloxRaw',
                                      'driverMonitoringState', 'longitudinalPlan', 'lateralPlan', 'liveLocationKalman',
-                                     'frame', 'frontFrame', 'managerState', 'liveParameters', 'radarState'], ignore_alive=ignore)
+                                     'frame', 'frontFrame', 'managerState', 'liveParameters', 'radarState', 'testJoystick'], ignore_alive=ignore)
+
+    self.interceptor = Interceptor()
 
     self.can_sock = can_sock
     if can_sock is None:
@@ -264,6 +267,9 @@ class Controls:
 
     self.sm.update(0)
 
+    # Update Interceptor 
+    self.interceptor.update(self.sm['testJoystick'], self.sm.logMonoTime['testJoystick'], sec_since_boot()*1e9)
+
     # Check for CAN timeout
     if not can_strs:
       self.can_error_counter += 1
@@ -409,6 +415,12 @@ class Controls:
 
       if left_deviation or right_deviation:
         self.events.add(EventName.steerSaturated)
+
+    # Interceptor; (signal, index, part, scale=1.0)
+    actuators.gas = self.interceptor.override_axis(actuators.gas, 1, 'negative', .5)  # Rescale for Toyota to maxgas=0.5
+    actuators.brake = self.interceptor.override_axis(actuators.brake, 1, 'positive', 1.)
+    actuators.steer = self.interceptor.override_axis(actuators.steer, 2, 'full', -1.)  # For torque based steering
+    actuators.steerAngle = self.interceptor.override_axis(actuators.steer, 2, 'full', -45.)  # For angle based steering, limit 45 deg
 
     return actuators, v_acc_sol, a_acc_sol, lac_log
 
