@@ -269,6 +269,8 @@ class Controls:
 
     # Update Interceptor 
     self.interceptor.update(self.sm['testJoystick'], self.sm.logMonoTime['testJoystick'], sec_since_boot()*1e9)
+    # EXPERIMENT
+    self.interceptor.override_carparams(self.CP)
 
     # Check for CAN timeout
     if not can_strs:
@@ -541,7 +543,7 @@ class Controls:
     self.events_prev = self.events.names.copy()
 
     # carParams - logged every 50 seconds (> 1 per segment)
-    if (self.sm.frame % int(50. / DT_CTRL) == 0):
+    if (self.sm.frame % int(2. / DT_CTRL) == 0):
       cp_send = messaging.new_message('carParams')
       cp_send.carParams = self.CP
       self.pm.send('carParams', cp_send)

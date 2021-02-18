@@ -1199,6 +1199,14 @@ struct Joystick {
   buttons @1: List(Float32);
   enabled @2: Bool;
   axesMode @3: List(Text);
+
+  editEnabled @4: Bool;
+  editLongitudinalTuning @5 :Car.CarParams.LongitudinalPIDTuning;
+  editLateralTuning :union {
+    pid @6 :Car.CarParams.LateralPIDTuning;
+    indi @7 :Car.CarParams.LateralINDITuning;
+    lqr @8 :Car.CarParams.LateralLQRTuning;
+  }
 }
 
 struct DriverState {

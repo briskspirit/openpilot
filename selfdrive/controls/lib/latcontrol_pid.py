@@ -16,6 +16,10 @@ class LatControlPID():
     self.pid.reset()
 
   def update(self, active, CS, CP, path_plan):
+    self.pid.update_data((CP.lateralTuning.pid.kpBP, CP.lateralTuning.pid.kpV),
+                          (CP.lateralTuning.pid.kiBP, CP.lateralTuning.pid.kiV),
+                          k_f=CP.lateralTuning.pid.kf)
+
     pid_log = log.ControlsState.LateralPIDState.new_message()
     pid_log.steerAngle = float(CS.steeringAngle)
     pid_log.steerRate = float(CS.steeringRate)

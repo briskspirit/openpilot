@@ -6,15 +6,18 @@ MODES = ['interceptor', 'injector', 'adder']
 class Interceptor:
   def __init__(self):
     self.enabled = False
+    self.edit_enabled = False
     self.interceptor = None
     self.watchdog = 2 * 1e9  # In 2 sec disable interceptor if there is no new messages
 
   def update(self, msg, msg_timestamp, current_timestamp):
     if msg_timestamp < current_timestamp - self.watchdog:
       self.enabled = False
+      self.edit_enabled = False
       return
 
     self.enabled = msg.enabled
+    self.edit_enabled = msg.editEnabled
     self.interceptor = msg
 
   def override_axis(self, signal, index, part, scale=1.0):
@@ -54,3 +57,28 @@ class Interceptor:
       signal_candidate = self.interceptor.buttons[index] * scale
 
     return signal_candidate
+
+  def override_carparams(self, CP):
+    if self.edit_enabled:
+
+      # editLongitudinalTuning, changing only values without BPs
+      if len(CP.longitudinalTuning.kpV) == len(self.interceptor.editLongitudinalTuning.kpV):
+        for idx, val in enumerate(self.interceptor.editLongitudinalTuning.kpV):
+          CP.longitudinalTuning.kpV[idx] = val
+
+      if len(CP.longitudinalTuning.kiV) == len(self.interceptor.editLongitudinalTuning.kiV):
+        for idx, val in enumerate(self.interceptor.editLongitudinalTuning.kiV):
+          CP.longitudinalTuning.kiV[idx] = val
+
+      if len(CP.longitudinalTuning.deadzoneV) == len(self.interceptor.editLongitudinalTuning.deadzoneV):
+        for idx, val in enumerate(self.interceptor.editLongitudinalTuning.deadzoneV):
+          CP.longitudinalTuning.deadzoneV[idx] = val
+
+      # editLateralTuning, changing only values without BPs
+      if len(CP.lateralTuning.pid.kpV) == len(self.interceptor.editLateralTuning.pid.kpV):
+        for idx, val in enumerate(self.interceptor.editLateralTuning.pid.kpV):
+          CP.lateralTuning.pid.kpV[idx] = val
+
+      if len(CP.lateralTuning.pid.kiV) == len(self.interceptor.editLateralTuning.pid.kiV):
+        for idx, val in enumerate(self.interceptor.editLateralTuning.pid.kiV):
+          CP.lateralTuning.pid.kiV[idx] = val

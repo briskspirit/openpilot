@@ -72,6 +72,10 @@ class LongControl():
     gas_max = interp(CS.vEgo, CP.gasMaxBP, CP.gasMaxV)
     brake_max = interp(CS.vEgo, CP.brakeMaxBP, CP.brakeMaxV)
 
+    #Update PID values
+    self.pid.update_data((CP.longitudinalTuning.kpBP, CP.longitudinalTuning.kpV),
+                         (CP.longitudinalTuning.kiBP, CP.longitudinalTuning.kiV))
+
     # Update state machine
     output_gb = self.last_output_gb
     self.long_control_state = long_control_state_trans(active, self.long_control_state, CS.vEgo,

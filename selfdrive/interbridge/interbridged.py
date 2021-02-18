@@ -95,10 +95,16 @@ class InterBridge:
       elif 'testJoystick' in msg:
         dat = messaging.new_message('testJoystick')
         testJoystick = dat.testJoystick
-        testJoystick.axes = msg['testJoystick']['axes']
-        testJoystick.buttons = msg['testJoystick']['buttons']
-        testJoystick.enabled = msg['testJoystick']['enabled']
-        testJoystick.axesMode = msg['testJoystick']['axesMode']
+        if 'enabled' in msg['testJoystick']:
+          testJoystick.axes = msg['testJoystick']['axes']
+          testJoystick.buttons = msg['testJoystick']['buttons']
+          testJoystick.enabled = msg['testJoystick']['enabled']
+          testJoystick.axesMode = msg['testJoystick']['axesMode']
+        if 'editEnabled' in msg['testJoystick']:
+          testJoystick.editEnabled = msg['testJoystick']['editEnabled']
+          testJoystick.editLongitudinalTuning = msg['testJoystick']['editLongitudinalTuning']
+          testJoystick.editLateralTuning = msg['testJoystick']['editLateralTuning']
+
         self.pm.send('testJoystick', dat)
 
   def interbridged_thread(self, count_callback):

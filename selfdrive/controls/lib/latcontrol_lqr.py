@@ -7,6 +7,18 @@ from cereal import log
 
 class LatControlLQR():
   def __init__(self, CP):
+    self.update_data(CP)
+
+    self.x_hat = np.array([[0], [0]])
+    self.i_unwind_rate = 0.3 * DT_CTRL
+    self.i_rate = 1.0 * DT_CTRL
+
+    self.sat_count_rate = 1.0 * DT_CTRL
+    
+
+    self.reset()
+
+  def update_data(self, CP):
     self.scale = CP.lateralTuning.lqr.scale
     self.ki = CP.lateralTuning.lqr.ki
 
@@ -17,14 +29,7 @@ class LatControlLQR():
     self.L = np.array(CP.lateralTuning.lqr.l).reshape((2, 1))
     self.dc_gain = CP.lateralTuning.lqr.dcGain
 
-    self.x_hat = np.array([[0], [0]])
-    self.i_unwind_rate = 0.3 * DT_CTRL
-    self.i_rate = 1.0 * DT_CTRL
-
-    self.sat_count_rate = 1.0 * DT_CTRL
     self.sat_limit = CP.steerLimitTimer
-
-    self.reset()
 
   def reset(self):
     self.i_lqr = 0.0
@@ -44,6 +49,8 @@ class LatControlLQR():
     return self.sat_count > self.sat_limit
 
   def update(self, active, CS, CP, path_plan):
+    self.update_data(CP)
+
     lqr_log = log.ControlsState.LateralLQRState.new_message()
 
     steers_max = get_steer_max(CP, CS.vEgo)

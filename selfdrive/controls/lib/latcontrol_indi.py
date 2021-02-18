@@ -34,16 +34,9 @@ class LatControlINDI():
     self.A_K = A - np.dot(K, C)
     self.x = np.array([[0.], [0.], [0.]])
 
-    self.enforce_rate_limit = CP.carName == "toyota"
-
-    self._RC = (CP.lateralTuning.indi.timeConstantBP, CP.lateralTuning.indi.timeConstantV)
-    self._G = (CP.lateralTuning.indi.actuatorEffectivenessBP, CP.lateralTuning.indi.actuatorEffectivenessV)
-    self._outer_loop_gain = (CP.lateralTuning.indi.outerLoopGainBP, CP.lateralTuning.indi.outerLoopGainV)
-    self._inner_loop_gain = (CP.lateralTuning.indi.innerLoopGainBP, CP.lateralTuning.indi.innerLoopGainV)
-
+    self.update_data(CP)
     self.sat_count_rate = 1.0 * DT_CTRL
-    self.sat_limit = CP.steerLimitTimer
-
+    
     self.reset()
 
   @property
@@ -61,6 +54,16 @@ class LatControlINDI():
   @property
   def inner_loop_gain(self):
     return interp(self.speed, self._inner_loop_gain[0], self._inner_loop_gain[1])
+
+  def update_data(self, CP):
+    self._RC = (CP.lateralTuning.indi.timeConstantBP, CP.lateralTuning.indi.timeConstantV)
+    self._G = (CP.lateralTuning.indi.actuatorEffectivenessBP, CP.lateralTuning.indi.actuatorEffectivenessV)
+    self._outer_loop_gain = (CP.lateralTuning.indi.outerLoopGainBP, CP.lateralTuning.indi.outerLoopGainV)
+    self._inner_loop_gain = (CP.lateralTuning.indi.innerLoopGainBP, CP.lateralTuning.indi.innerLoopGainV)
+
+    self.sat_limit = CP.steerLimitTimer
+
+    self.enforce_rate_limit = CP.carName == "toyota"
 
   def reset(self):
     self.delayed_output = 0.
@@ -81,6 +84,8 @@ class LatControlINDI():
     return self.sat_count > self.sat_limit
 
   def update(self, active, CS, CP, path_plan):
+    self.update_data(CP)
+    
     self.speed = CS.vEgo
     # Update Kalman filter
     y = np.array([[math.radians(CS.steeringAngle)], [math.radians(CS.steeringRate)]])
